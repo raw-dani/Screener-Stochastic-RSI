@@ -1,5 +1,6 @@
 require('dotenv').config();
 const YahooFinance = require('yahoo-finance2').default;
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const yahooFinance = new YahooFinance();
 const { StochasticRSI, SMA } = require('technicalindicators');
 const fs = require('fs');
@@ -8,17 +9,32 @@ const https = require('https');
 // ==========================================
 // CONFIGURATION / PENGATURAN USER
 // ==========================================
-const USE_TELEGRAM = true; 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''; 
+const JEDA_WAKTU_MS = 1500;
+
+const USE_TELEGRAM = true;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
 const USE_WHATSAPP = process.env.USE_WHATSAPP === 'true';
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
-const TWILIO_WHATSAPP_TO = process.env.TWILIO_WHATSAPP_TO || '';
+const WHATSAPP_TARGET = process.env.WHATSAPP_TARGET || '';
 
-const JEDA_WAKTU_MS = 1500;
+const whatsappClient = USE_WHATSAPP ? new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: { headless: true }
+}) : null;
+
+if (USE_WHATSAPP) {
+    whatsappClient.on('qr', (qr) => {
+        console.log('📱 QR Code WhatsApp (scan dengan HP Anda):');
+        console.log(qr);
+    });
+    
+    whatsappClient.on('ready', () => {
+        console.log('✅ WhatsApp client siap!');
+    });
+    
+    whatsappClient.initialize().catch(console.error);
+}
 
 // Daftar Saham AS
 const symbols = [
@@ -242,53 +258,24 @@ function sendTelegramMessage(message) {
     });
 }
 
-// FUNGSI WHATSAPP MENGGUNAKAN TWILIO API
-function sendWhatsAppMessage(message) {
-    return new Promise((resolve) => {
-        if (!USE_WHATSAPP || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_TO) {
-            resolve();
+// FUNGSI WHATSAPP MENGGUNAKAN whatsapp-web.js
+async function sendWhatsAppMessage(message) {
+    if (!USE_WHATSAPP || !WHATSAPP_TARGET) {
+        return;
+    }
+
+    try {
+        if (!whatsappClient.info) {
+            console.error('💬 ❌ WhatsApp belum terhubung');
             return;
         }
 
-        const formData = new URLSearchParams();
-        formData.append('From', TWILIO_WHATSAPP_FROM);
-        formData.append('To', `whatsapp:${TWILIO_WHATSAPP_TO}`);
-        formData.append('Body', message);
-        const encodedData = formData.toString();
-
-        const options = {
-            hostname: 'api.twilio.com',
-            port: 443,
-            path: `/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64'),
-                'Content-Length': Buffer.byteLength(encodedData)
-            }
-        };
-
-        const req = https.request(options, (res) => {
-            let responseBody = '';
-            res.on('data', (chunk) => responseBody += chunk);
-            res.on('end', () => {
-                if (res.statusCode === 201 || res.statusCode === 200) {
-                    console.log('💬 ✅ Pesan WhatsApp berhasil dikirim!');
-                } else {
-                    console.error(`💬 ❌ Gagal kirim WhatsApp (Error ${res.statusCode}): ${responseBody}`);
-                }
-                resolve();
-            });
-        });
-
-        req.on('error', (error) => {
-            console.error(`💬 ❌ [Network Error WhatsApp] ${error.message}`);
-            resolve();
-        });
-
-        req.write(encodedData);
-        req.end();
-    });
+        const chat = await whatsappClient.getChatById(`${WHATSAPP_TARGET}@c.us`);
+        await chat.sendMessage(message);
+        console.log('💬 ✅ Pesan WhatsApp berhasil dikirim!');
+    } catch (error) {
+        console.error(`💬 ❌ Gagal kirim WhatsApp: ${error.message}`);
+    }
 }
 
 function sendNotification(message) {
@@ -296,7 +283,7 @@ function sendNotification(message) {
     if (USE_TELEGRAM && TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
         promises.push(sendTelegramMessage(message));
     }
-    if (USE_WHATSAPP && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_TO) {
+    if (USE_WHATSAPP && WHATSAPP_TARGET) {
         promises.push(sendWhatsAppMessage(message));
     }
     return Promise.all(promises);
