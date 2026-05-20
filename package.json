@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^16.4.5",
     "technicalindicators": "^3.1.0",
     "yahoo-finance2": "^3.14.1"
   }

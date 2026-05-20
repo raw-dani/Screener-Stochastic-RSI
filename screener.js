@@ -1,3 +1,4 @@
+require('dotenv').config();
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 const { StochasticRSI, SMA } = require('technicalindicators');
