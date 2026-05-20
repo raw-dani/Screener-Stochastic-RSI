@@ -7,7 +7,7 @@ Stock screener berbasis Node.js yang menggunakan indikator Stochastic RSI untuk 
 - **Multi-Timeframe**: Screening pada timeframe 1H dan 4H
 - **Stochastic RSI**: Deteksi momentum dengan strategi "Kotak Hijau"
 - **Telegram Notification**: Kirim notifikasi sinyal ke Telegram
-- **WhatsApp Notification**: Kirim notifikasi via Twilio WhatsApp API
+- **WhatsApp Notification**: Kirim notifikasi via WhatsApp Web (gratis)
 - **Export CSV**: Hasil screening dapat diekspor ke file CSV
 - **SMA 200 Filter**: Filter tren bullish/bearish berdasarkan harga vs SMA 200
 
@@ -15,7 +15,7 @@ Stock screener berbasis Node.js yang menggunakan indikator Stochastic RSI untuk 
 
 - Node.js (v14+)
 - npm/yarn
-- Twilio account (untuk WhatsApp)
+- Chrome/Chromium (untuk WhatsApp Web)
 
 ## Instalasi
 
@@ -29,18 +29,15 @@ Buat file `.env` dengan konfigurasi:
 
 ```bash
 # Telegram (opsional)
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
 
-# WhatsApp via Twilio (opsional)
-USE_WHATSAPP=true
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-TWILIO_WHATSAPP_TO=6281234567890
+# WhatsApp Web (gratis)
+USE_WHATSAPP=false
+WHATSAPP_TARGET=6281234567890  # nomor WhatsApp tanpa + dan 0
 ```
 
-Atau set langsung di environment variables.
+**Catatan WhatsApp**: Pada pertama kali dijalankan, akan muncul QR Code yang harus discan menggunakan WhatsApp Anda. Setelah terhubung, session akan tersimpan otomatis.
 
 ## Strategi "Kotak Hijau"
 
