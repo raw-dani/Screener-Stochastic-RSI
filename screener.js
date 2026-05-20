@@ -8,8 +8,14 @@ const https = require('https');
 // CONFIGURATION / PENGATURAN USER
 // ==========================================
 const USE_TELEGRAM = true; 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN'; 
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''; 
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+
+const USE_WHATSAPP = process.env.USE_WHATSAPP === 'true';
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
+const TWILIO_WHATSAPP_TO = process.env.TWILIO_WHATSAPP_TO || '';
 
 const JEDA_WAKTU_MS = 1500;
 
@@ -198,7 +204,7 @@ function sendTelegramMessage(message) {
         const data = JSON.stringify({
             chat_id: TELEGRAM_CHAT_ID,
             text: message,
-            parse_mode: 'HTML' // Menggunakan HTML lebih stabil dari Markdown
+            parse_mode: 'HTML'
         });
 
         const options = {
@@ -208,7 +214,7 @@ function sendTelegramMessage(message) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(data) // Memperbaiki isu panjang byte Emoji
+                'Content-Length': Buffer.byteLength(data)
             }
         };
 
@@ -221,7 +227,7 @@ function sendTelegramMessage(message) {
                 } else {
                     console.error(`📱 ❌ Gagal kirim Telegram (Error ${res.statusCode}): ${responseBody}`);
                 }
-                resolve(); // Memberitahu program bahwa proses kirim selesai
+                resolve();
             });
         });
 
@@ -233,6 +239,66 @@ function sendTelegramMessage(message) {
         req.write(data);
         req.end();
     });
+}
+
+// FUNGSI WHATSAPP MENGGUNAKAN TWILIO API
+function sendWhatsAppMessage(message) {
+    return new Promise((resolve) => {
+        if (!USE_WHATSAPP || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_TO) {
+            resolve();
+            return;
+        }
+
+        const formData = new URLSearchParams();
+        formData.append('From', TWILIO_WHATSAPP_FROM);
+        formData.append('To', `whatsapp:${TWILIO_WHATSAPP_TO}`);
+        formData.append('Body', message);
+        const encodedData = formData.toString();
+
+        const options = {
+            hostname: 'api.twilio.com',
+            port: 443,
+            path: `/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': 'Basic ' + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64'),
+                'Content-Length': Buffer.byteLength(encodedData)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let responseBody = '';
+            res.on('data', (chunk) => responseBody += chunk);
+            res.on('end', () => {
+                if (res.statusCode === 201 || res.statusCode === 200) {
+                    console.log('💬 ✅ Pesan WhatsApp berhasil dikirim!');
+                } else {
+                    console.error(`💬 ❌ Gagal kirim WhatsApp (Error ${res.statusCode}): ${responseBody}`);
+                }
+                resolve();
+            });
+        });
+
+        req.on('error', (error) => {
+            console.error(`💬 ❌ [Network Error WhatsApp] ${error.message}`);
+            resolve();
+        });
+
+        req.write(encodedData);
+        req.end();
+    });
+}
+
+function sendNotification(message) {
+    const promises = [];
+    if (USE_TELEGRAM && TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+        promises.push(sendTelegramMessage(message));
+    }
+    if (USE_WHATSAPP && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_TO) {
+        promises.push(sendWhatsAppMessage(message));
+    }
+    return Promise.all(promises);
 }
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -393,7 +459,7 @@ async function runScreener(timeframe, label) {
         const fullText = headerText + entries + buildFooter(0, total, total);
 
         if (fullText.length <= TELEGRAM_MAX_LEN) {
-            await sendTelegramMessage(fullText);
+            await sendNotification(fullText);
         } else {
             console.log(`⚠️ Pesan terlalu panjang (${fullText.length} chars), membagi menjadi ${Math.ceil(entries.length / (TELEGRAM_MAX_LEN - headerText.length - footerLen))} pesan...`);
             let start = 0;
@@ -408,7 +474,7 @@ async function runScreener(timeframe, label) {
                 const chunk = entries.substring(start, end);
                 const isLastPart = end >= entries.length;
                 const partMsg = buildHeader(total, label) + chunk + (isLastPart ? buildFooter(start, entries.length, total) : '');
-                await sendTelegramMessage(partMsg);
+                await sendNotification(partMsg);
                 start = end;
                 part++;
                 await sleep(300);
