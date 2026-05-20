@@ -37,7 +37,19 @@ USE_WHATSAPP=false
 WHATSAPP_TARGET=6281234567890  # nomor WhatsApp tanpa + dan 0
 ```
 
-**Catatan WhatsApp**: Pada pertama kali dijalankan, akan muncul QR Code yang harus discan menggunakan WhatsApp Anda. Setelah terhubung, session akan tersimpan otomatis.
+### Panduan WhatsApp Setup
+
+1. Set `USE_WHATSAPP=true` di file `.env`
+2. Jalankan screener: `node screener.js`
+3. Pada pertama kali, akan muncul QR Code di console
+4. Buka WhatsApp di HP Anda → Settings → Linked Devices → Link a Device
+5. Scan QR Code yang muncul di console
+6. Setelah terhubung, session akan tersimpan di folder `.wwebjs_auth`
+
+**Catatan:**
+- File `.wwebjs_auth` berisi session WhatsApp - jangan di-commit ke Git
+- Jika ingin reset koneksi, hapus folder `.wwebjs_auth`
+- Pastikan Chrome/Chromium terinstal di sistem Anda
 
 ## Strategi "Kotak Hijau"
 
