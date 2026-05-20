@@ -21,6 +21,7 @@ Stock screener berbasis Node.js yang menggunakan indikator Stochastic RSI untuk 
 
 ```bash
 npm install yahoo-finance2 technicalindicators
+npm install whatsapp-web.js
 ```
 
 ## Konfigurasi
@@ -37,8 +38,11 @@ USE_WHATSAPP=false
 WHATSAPP_TARGET=6281234567890  # nomor WhatsApp tanpa + dan 0
 ```
 
-### Panduan WhatsApp Setup
+## Panduan WhatsApp Setup
 
+Ada 2 opsi WhatsApp notification:
+
+### Opsi 1: WhatsApp Web (Gratis, Perlu Scan QR)
 1. Set `USE_WHATSAPP=true` di file `.env`
 2. Jalankan screener: `node screener.js`
 3. Pada pertama kali, akan muncul QR Code di console
@@ -47,9 +51,24 @@ WHATSAPP_TARGET=6281234567890  # nomor WhatsApp tanpa + dan 0
 6. Setelah terhubung, session akan tersimpan di folder `.wwebjs_auth`
 
 **Catatan:**
-- File `.wwebjs_auth` berisi session WhatsApp - jangan di-commit ke Git
-- Jika ingin reset koneksi, hapus folder `.wwebjs_auth`
-- Pastikan Chrome/Chromium terinstal di sistem Anda
+- Hanya mendukung WhatsApp **personal** (bukan Business)
+- Jika gagal, coba hapus folder `.wwebjs_auth` dan ulangi
+
+### Opsi 2: CallMeBot API (Gratis, Tanpa Scan QR)
+Jika WhatsApp Web tidak berhasil, gunakan CallMeBot:
+1. Kirim pesan "join Glory Mango" ke +34 623 636 975 via WhatsApp
+2. Anda akan menerima API Key via WhatsApp
+3. Set di `.env`:
+   ```bash
+   USE_CALLMEBOT=true
+   CALLMEBOT_API_KEY=your_api_key_dari_whatsapp
+   WHATSAPP_TARGET=6281234567890
+   ```
+
+**Catatan:**
+- Batas 50 pesan/hari
+- Tidak perlu scan QR Code
+- Cocok untuk penggunaan pribadi
 
 ## Strategi "Kotak Hijau"
 

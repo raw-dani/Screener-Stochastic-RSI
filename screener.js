@@ -5,6 +5,7 @@ const yahooFinance = new YahooFinance();
 const { StochasticRSI, SMA } = require('technicalindicators');
 const fs = require('fs');
 const https = require('https');
+const qrcode = require('qrcode-terminal');
 
 // ==========================================
 // CONFIGURATION / PENGATURAN USER
@@ -18,22 +19,66 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const USE_WHATSAPP = process.env.USE_WHATSAPP === 'true';
 const WHATSAPP_TARGET = process.env.WHATSAPP_TARGET || '';
 
-const whatsappClient = USE_WHATSAPP ? new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: { headless: true }
-}) : null;
+const USE_CALLMEBOT = process.env.USE_CALLMEBOT === 'true';
+const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '';
+
+let whatsappClient = null;
 
 if (USE_WHATSAPP) {
+    const puppeteerOptions = { headless: true };
+    
+    // Coba cari Chrome di lokasi umum di Windows
+    const chromePaths = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe'
+    ];
+    
+    for (const path of chromePaths) {
+        if (fs.existsSync(path)) {
+            puppeteerOptions.executablePath = path;
+            console.log('🔧 Using Chrome at:', path);
+            break;
+        }
+    }
+
+    if (!puppeteerOptions.executablePath) {
+        console.log('⚠️ Chrome tidak ditemukan, menggunakan puppeteer default');
+    }
+
+    whatsappClient = new Client({
+        authStrategy: new LocalAuth(),
+        puppeteer: puppeteerOptions
+    });
+
     whatsappClient.on('qr', (qr) => {
-        console.log('📱 QR Code WhatsApp (scan dengan HP Anda):');
-        console.log(qr);
+        console.log('\n📱 ================================');
+        console.log('📱 QR CODE WHATSAPP - SCAN DENGAN HP ANDA');
+        console.log('📱 ================================\n');
+        qrcode.generate(qr, { small: true });
+        console.log('\n📱 ================================\n');
     });
     
     whatsappClient.on('ready', () => {
         console.log('✅ WhatsApp client siap!');
     });
     
-    whatsappClient.initialize().catch(console.error);
+    whatsappClient.on('authenticated', () => {
+        console.log('✅ WhatsApp terautentikasi!');
+    });
+
+    whatsappClient.on('auth_failure', (msg) => {
+        console.error('❌ WhatsApp auth failure:', msg);
+    });
+
+    whatsappClient.on('disconnected', (reason) => {
+        console.log('⚠️ WhatsApp disconnected:', reason);
+    });
+
+    whatsappClient.initialize().catch(err => {
+        console.error('❌ WhatsApp init error:', err.message);
+        process.exit(1);
+    });
 }
 
 // Daftar Saham AS
@@ -278,13 +323,65 @@ async function sendWhatsAppMessage(message) {
     }
 }
 
+// FUNGSI WHATSAPP CALLMEBOT API (GRATIS, TANPA QR)
+function sendCallMeBotMessage(message) {
+    return new Promise((resolve) => {
+        if (!USE_CALLMEBOT || !CALLMEBOT_API_KEY || !WHATSAPP_TARGET) {
+            resolve();
+            return;
+        }
+
+        const data = JSON.stringify({
+            phone: WHATSAPP_TARGET,
+            apikey: CALLMEBOT_API_KEY,
+            text: message,
+            format: 'html'
+        });
+
+        const options = {
+            hostname: 'api.callmebot.com',
+            port: 443,
+            path: '/whatsapp.php',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(data)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let responseBody = '';
+            res.on('data', (chunk) => responseBody += chunk);
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    console.log('💬 ✅ Pesan WhatsApp CallMeBot berhasil dikirim!');
+                } else {
+                    console.error(`💬 ❌ Gagal kirim CallMeBot (Error ${res.statusCode}): ${responseBody}`);
+                }
+                resolve();
+            });
+        });
+
+        req.on('error', (error) => {
+            console.error(`💬 ❌ [CallMeBot Error] ${error.message}`);
+            resolve();
+        });
+
+        req.write(data);
+        req.end();
+    });
+}
+
 function sendNotification(message) {
     const promises = [];
     if (USE_TELEGRAM && TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
         promises.push(sendTelegramMessage(message));
     }
-    if (USE_WHATSAPP && WHATSAPP_TARGET) {
+    if (USE_WHATSAPP && WHATSAPP_TARGET && whatsappClient?.info) {
         promises.push(sendWhatsAppMessage(message));
+    }
+    if (USE_CALLMEBOT && CALLMEBOT_API_KEY && WHATSAPP_TARGET) {
+        promises.push(sendCallMeBotMessage(message));
     }
     return Promise.all(promises);
 }
