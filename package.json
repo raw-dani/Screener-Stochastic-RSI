@@ -1,0 +1,16 @@
+{
+  "name": "saham-rsi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "technicalindicators": "^3.1.0",
+    "yahoo-finance2": "^3.14.1"
+  }
+}
