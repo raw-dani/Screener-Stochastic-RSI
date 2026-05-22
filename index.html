@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock RSI Screener Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        header h1 {
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-right: 1px solid #eee;
+            font-weight: 600;
+        }
+        .tab:last-child {
+            border-right: none;
+        }
+        .tab.active {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+        }
+        .tab:hover:not(.active) {
+            background: #f0f0f0;
+        }
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+        }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+        th.sortable:hover {
+            background-color: #e9ecef;
+        }
+        th.sortable .sort-indicator {
+            font-size: 0.75rem;
+            color: #bbb;
+            margin-left: 4px;
+        }
+        th.sortable.sorted-asc .sort-indicator,
+        th.sortable.sorted-desc .sort-indicator {
+            color: #6a11cb;
+            font-weight: bold;
+        }
+        th.sortable.sorted-asc,
+        th.sortable.sorted-desc {
+            background-color: #f0ebff;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .signal-bullish {
+            color: #28a745;
+            font-weight: 600;
+        }
+        .signal-bearish {
+            color: #fd7e14;
+            font-weight: 600;
+        }
+        .price {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 600;
+        }
+        .indicator {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .timestamp {
+            font-size: 0.8rem;
+            color: #999;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-style: italic;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6a11cb;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        .update-time {
+            font-weight: 600;
+            color: #6a11cb;
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+            }
+            .tab {
+                border-right: none;
+                border-bottom: 1px solid #eee;
+            }
+            .tab:last-child {
+                border-bottom: none;
+            }
+            th, td {
+                padding: 10px;
+                font-size: 0.9rem;
+            }
+            header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Stock RSI Screener Dashboard</h1>
+            <p>Pantau sinyal beli saham AS dengan indikator Stochastic RSI</p>
+        </header>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="1h">1H Timeframe</div>
+            <div class="tab" data-tab="2h">2H Timeframe</div>
+            <div class="tab" data-tab="4h">4H Timeframe</div>
+        </div>
+        
+        <div id="1h" class="tab-content active">
+            <div class="loading">Memuat data...</div>
+        </div>
+        
+        <div id="2h" class="tab-content">
+            <div class="loading">Memuat data...</div>
+        </div>
+        
+        <div id="4h" class="tab-content">
+            <div class="loading">Memuat data...</div>
+        </div>
+        
+        <footer>
+            <p>Data diperbarui terakhir: <span id="last-update">-</span></p>
+            <p>&copy; 2026 Stock RSI Screener. Untuk referensi trading saja.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            let autoRefreshInterval = null;
+            const REFRESH_INTERVAL = 300000; // 5 minutes in milliseconds
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs and contents
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+                    
+                    // Show corresponding content
+                    const tabId = tab.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                    
+                    // Load data for this tab if not already loaded
+                    if (!document.getElementById(tabId).dataset.loaded) {
+                        loadCSVData(tabId);
+                        document.getElementById(tabId).dataset.loaded = 'true';
+                    }
+                    
+                    // Restart auto-refresh when tab changes
+                    restartAutoRefresh();
+                });
+            });
+            
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+            
+            // Load initial tab (1H)
+            loadCSVData('1h');
+            document.getElementById('1h').dataset.loaded = 'true';
+            
+            // Start auto-refresh
+            startAutoRefresh();
+            
+            // Show browser notification helper
+            function showBrowserNotification(title, body, badge = '🔔') {
+                if (!('Notification' in window)) return;
+                if (Notification.permission === 'granted') {
+                    // Only notify if page is not focused (user is on another tab)
+                    if (document.hidden) {
+                        const notif = new Notification(title, {
+                            body: body,
+                            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📈</text></svg>',
+                            tag: 'stock-update'
+                        });
+                        setTimeout(() => notif.close(), 8000);
+                    }
+                }
+            }
+            
+            // Render table with sortable headers
+            function renderTable(container, data, timeframe) {
+                const sortColumn = container._sortColumn;
+                const sortDirection = container._sortDirection;
+                
+                // Sort data if a sort column is set
+                let sortedData = [...data];
+                if (sortColumn !== null) {
+                    sortedData.sort((a, b) => {
+                        const colKey = sortColumn.key;
+                        let valA, valB;
+                        
+                        // Extract raw value based on column
+                        if (colKey === 'Symbol') {
+                            valA = a.Symbol;
+                            valB = b.Symbol;
+                        } else if (colKey === 'Close Price') {
+                            valA = parseFloat(a['Close Price']);
+                            valB = parseFloat(b['Close Price']);
+                        } else if (colKey === 'Stoch_K') {
+                            valA = parseFloat(a.Stoch_K);
+                            valB = parseFloat(b.Stoch_K);
+                        } else if (colKey === 'Stoch_D') {
+                            valA = parseFloat(a.Stoch_D);
+                            valB = parseFloat(b.Stoch_D);
+                        } else if (colKey === 'SMA_200') {
+                            valA = parseFloat(a[`SMA_200_${timeframe.toUpperCase()}`]);
+                            valB = parseFloat(b[`SMA_200_${timeframe.toUpperCase()}`]);
+                        } else if (colKey === 'Trend') {
+                            valA = a.Trend;
+                            valB = b.Trend;
+                        } else if (colKey === 'Timestamp') {
+                            valA = new Date(a.Timestamp).getTime();
+                            valB = new Date(b.Timestamp).getTime();
+                        }
+                        
+                        // Compare values
+                        if (typeof valA === 'string' && typeof valB === 'string') {
+                            return sortDirection === 'asc' 
+                                ? valA.localeCompare(valB) 
+                                : valB.localeCompare(valA);
+                        } else {
+                            return sortDirection === 'asc' 
+                                ? (valA - valB) 
+                                : (valB - valA);
+                        }
+                    });
+                }
+                
+                // Define column configurations
+                const columns = [
+                    { key: 'Symbol', label: 'Symbol', class: '' },
+                    { key: 'Close Price', label: 'Harga Penutup', class: 'price' },
+                    { key: 'Stoch_K', label: '%K', class: '' },
+                    { key: 'Stoch_D', label: '%D', class: '' },
+                    { key: 'SMA_200', label: 'SMA 200', class: '' },
+                    { key: 'Trend', label: 'Trend', class: '' },
+                    { key: 'Timestamp', label: 'Waktu', class: 'timestamp' }
+                ];
+                
+                // Helper to get cell value and class
+                function getCellValue(row, col) {
+                    if (col.key === 'Symbol') return { val: row.Symbol, cls: '' };
+                    if (col.key === 'Close Price') return { val: `$${parseFloat(row['Close Price']).toFixed(2)}`, cls: 'price' };
+                    if (col.key === 'Stoch_K') return { val: parseFloat(row.Stoch_K).toFixed(2), cls: '' };
+                    if (col.key === 'Stoch_D') return { val: parseFloat(row.Stoch_D).toFixed(2), cls: '' };
+                    if (col.key === 'SMA_200') return { val: `$${parseFloat(row[`SMA_200_${timeframe.toUpperCase()}`]).toFixed(2)}`, cls: '' };
+                    if (col.key === 'Trend') return { val: row.Trend, cls: row.Trend.includes('Bullish') ? 'signal-bullish' : 'signal-bearish' };
+                    if (col.key === 'Timestamp') return { val: row.Timestamp, cls: 'timestamp' };
+                    return { val: '', cls: '' };
+                }
+                
+                const table = document.createElement('table');
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            ${columns.map(col => `
+                                <th data-sort-key="${col.key}" class="sortable ${sortColumn && sortColumn.key === col.key ? 'sorted-' + sortDirection : ''}">
+                                    ${col.label}
+                                    <span class="sort-indicator">${sortColumn && sortColumn.key === col.key ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>
+                                </th>
+                            `).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sortedData.map(row => `
+                            <tr>
+                                ${columns.map(col => {
+                                    const cell = getCellValue(row, col);
+                                    return `<td${cell.cls ? ` class="${cell.cls}"` : ''}>${cell.val}</td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                `;
+                
+                // Add click sorting handler
+                table.querySelectorAll('th.sortable').forEach(th => {
+                    th.addEventListener('click', function() {
+                        const key = this.dataset.sortKey;
+                        const currentSort = container._sortColumn;
+                        
+                        if (currentSort && currentSort.key === key) {
+                            // Toggle direction
+                            container._sortDirection = container._sortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            container._sortColumn = { key: key };
+                            container._sortDirection = 'asc';
+                        }
+                        
+                        // Re-render the table
+                        const newTable = renderTable(container, container._data, container._timeframe);
+                        container.innerHTML = '';
+                        container.appendChild(newTable);
+                    });
+                });
+                
+                return table;
+            }
+            
+            // Function to load and display CSV data
+            function loadCSVData(timeframe) {
+                const contentDiv = document.getElementById(timeframe);
+                contentDiv.innerHTML = '<div class="loading">Memuat data...</div>';
+                
+                // Fetch the CSV file
+                console.log(`Mencari file: hasil_screening_${timeframe}.csv`);
+                fetch(`hasil_screening_${timeframe}.csv`)
+                    .then(response => {
+                        console.log(`Response status: ${response.status}`);
+                        if (!response.ok) {
+                            throw new Error(`File tidak ditemukan: hasil_screening_${timeframe}.csv (status: ${response.status})`);
+                        }
+                        return response.text();
+                    })
+                    .then(csvText => {
+                        const data = parseCSV(csvText);
+                        if (data.length === 0) {
+                            contentDiv.innerHTML = '<div class="no-data">Tidak ada sinyal yang ditemukan untuk timeframe ini.</div>';
+                            return;
+                        }
+                        
+                        // Check if data has changed (compare signal count)
+                        const previousCount = contentDiv._data ? contentDiv._data.length : 0;
+                        const newCount = data.length;
+                        
+                        // Store data for sorting
+                        contentDiv._data = data;
+                        contentDiv._timeframe = timeframe;
+                        contentDiv._sortColumn = null;
+                        contentDiv._sortDirection = 'asc';
+                        
+                        // Create table with sortable headers
+                        const table = renderTable(contentDiv, data, timeframe);
+                        contentDiv.innerHTML = '';
+                        contentDiv.appendChild(table);
+                        
+                        // Update last update time
+                        const now = new Date();
+                        document.getElementById('last-update').textContent = 
+                            now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID');
+                        
+                        // Show browser notification if data changed or first load
+                        if (previousCount === 0 || previousCount !== newCount) {
+                            const timeframeLabel = timeframe === '1h' ? '1H' : timeframe === '2h' ? '2H' : '4H';
+                            if (previousCount === 0 && newCount > 0) {
+                                showBrowserNotification(
+                                    `📊 Data ${timeframeLabel} Tersedia`,
+                                    `Ditemukan ${newCount} sinyal beli pada timeframe ${timeframeLabel}`
+                                );
+                            } else if (previousCount !== newCount) {
+                                const diff = newCount - previousCount;
+                                const diffText = diff > 0 ? `+${diff} sinyal baru` : `${diff} sinyal hilang`;
+                                showBrowserNotification(
+                                    `🔄 Data ${timeframeLabel} Diperbarui`,
+                                    `${diffText} — Total: ${newCount} sinyal`
+                                );
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading CSV:', error);
+                        contentDiv.innerHTML = `<div class="no-data">Gagal memuat data: ${error.message}</div>`;
+                    });
+            }
+            
+            // Simple CSV parser
+            function parseCSV(csvText) {
+                const lines = csvText.trim().split('\n');
+                if (lines.length < 2) return [];
+                
+                const headers = lines[0].split(',').map(h => h.trim());
+                const data = [];
+                
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',');
+                    if (values.length !== headers.length) continue;
+                    
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index].trim();
+                    });
+                    data.push(row);
+                }
+                
+                return data;
+            }
+            
+            // Auto-refresh functions
+            function startAutoRefresh() {
+                // Refresh immediately on load
+                refreshActiveTab();
+                
+                // Set interval for periodic refresh
+                autoRefreshInterval = setInterval(() => {
+                    refreshActiveTab();
+                }, REFRESH_INTERVAL);
+                
+                console.log(`Auto-refresh started (every ${REFRESH_INTERVAL/1000/60} minutes)`);
+            }
+            
+            function stopAutoRefresh() {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                    console.log('Auto-refresh stopped');
+                }
+            }
+            
+            function restartAutoRefresh() {
+                stopAutoRefresh();
+                startAutoRefresh();
+            }
+            
+            function refreshActiveTab() {
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) {
+                    const timeframe = activeTab.getAttribute('data-tab');
+                    console.log(`Refreshing data for ${timeframe}...`);
+                    loadCSVData(timeframe);
+                }
+            }
+            
+            // Optional: Add manual refresh button
+            const manualRefreshBtn = document.createElement('button');
+            manualRefreshBtn.innerHTML = '🔄 Refresh Sekarang';
+            manualRefreshBtn.style.position = 'fixed';
+            manualRefreshBtn.style.top = '20px';
+            manualRefreshBtn.style.right = '20px';
+            manualRefreshBtn.style.padding = '10px 15px';
+            manualRefreshBtn.style.background = '#6a11cb';
+            manualRefreshBtn.style.color = 'white';
+            manualRefreshBtn.style.border = 'none';
+            manualRefreshBtn.style.borderRadius = '5px';
+            manualRefreshBtn.style.cursor = 'pointer';
+            manualRefreshBtn.style.zIndex = '1000';
+            manualRefreshBtn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+            manualRefreshBtn.addEventListener('click', () => {
+                refreshActiveTab();
+                manualRefreshBtn.blur();
+            });
+            document.body.appendChild(manualRefreshBtn);
+        });
+    </script>
+</body>
+</html>

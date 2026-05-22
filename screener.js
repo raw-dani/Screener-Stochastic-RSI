@@ -1,11 +1,11 @@
 require('dotenv').config();
 const YahooFinance = require('yahoo-finance2').default;
-const { Client, LocalAuth } = require('whatsapp-web.js');
 const yahooFinance = new YahooFinance();
 const { StochasticRSI, SMA } = require('technicalindicators');
 const fs = require('fs');
 const https = require('https');
-const qrcode = require('qrcode-terminal');
+
+const RUN_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
 // ==========================================
 // CONFIGURATION / PENGATURAN USER
@@ -16,246 +16,192 @@ const USE_TELEGRAM = true;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
-const USE_WHATSAPP = process.env.USE_WHATSAPP === 'true';
-const WHATSAPP_TARGET = process.env.WHATSAPP_TARGET || '';
-
-const USE_CALLMEBOT = process.env.USE_CALLMEBOT === 'true';
-const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '';
-
-let whatsappClient = null;
-
-if (USE_WHATSAPP) {
-    const puppeteerOptions = { headless: true };
-    
-    // Coba cari Chrome di lokasi umum di Windows
-    const chromePaths = [
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe'
-    ];
-    
-    for (const path of chromePaths) {
-        if (fs.existsSync(path)) {
-            puppeteerOptions.executablePath = path;
-            console.log('🔧 Using Chrome at:', path);
-            break;
-        }
-    }
-
-    if (!puppeteerOptions.executablePath) {
-        console.log('⚠️ Chrome tidak ditemukan, menggunakan puppeteer default');
-    }
-
-    whatsappClient = new Client({
-        authStrategy: new LocalAuth(),
-        puppeteer: puppeteerOptions
-    });
-
-    whatsappClient.on('qr', (qr) => {
-        console.log('\n📱 ================================');
-        console.log('📱 QR CODE WHATSAPP - SCAN DENGAN HP ANDA');
-        console.log('📱 ================================\n');
-        qrcode.generate(qr, { small: true });
-        console.log('\n📱 ================================\n');
-    });
-    
-    whatsappClient.on('ready', () => {
-        console.log('✅ WhatsApp client siap!');
-    });
-    
-    whatsappClient.on('authenticated', () => {
-        console.log('✅ WhatsApp terautentikasi!');
-    });
-
-    whatsappClient.on('auth_failure', (msg) => {
-        console.error('❌ WhatsApp auth failure:', msg);
-    });
-
-    whatsappClient.on('disconnected', (reason) => {
-        console.log('⚠️ WhatsApp disconnected:', reason);
-    });
-
-    whatsappClient.initialize().catch(err => {
-        console.error('❌ WhatsApp init error:', err.message);
-        process.exit(1);
-    });
-}
-
 // Daftar Saham AS
 const symbols = [
-    // === MEGA CAP ===
-	'NVDA',   
-	'GOOGL',  
-	'GOOG',   
-	'AAPL',   
-	'MSFT',   
-	'AMZN',   
-	'AVGO',   
-	'META',   
-	'TSLA',   
-	'BRK.B',  
-	'WMT',    
-	'LLY',    
-	'JPM',    
-	'V',      
-	'MA',     
-	'XOM',    
-	'JNJ',    
-	'ORCL',  
-	'COST',   
-	'HD',     
-	'CSCO',   
-	'BAC',    
-	'CVX',    
-	'IBM',    
+    // === TOP MEGA CAP S&P 500 ===
+    'NVDA',
+    'AAPL',
+    'MSFT',
+    'AMZN',
+    'GOOGL',
+    'GOOG',
+    'AVGO',
+    'TSLA',
+    'META',
+    'WMT',
+    'BRK.B',
+    'LLY',
+    'MU',
+    'JPM',
+    'AMD',
+    'XOM',
+    'V',
+    'ORCL',
+    'INTC',
+    'JNJ',
+    'CSCO',
+    'COST',
+    'MA',
+    'CAT',
+    'CVX',
+    'ABBV',
+    'NFLX',
+    'UNH',
+    'LRCX',
+    'BAC',
+    'KO',
+    'HD',
+    'MRK',
+    'CRM',
+    'PG',
+    'PM',
+    'GE',
+    'IBM',
+    'WFC',
+    'MS',
+    'GS',
+    'TMO',
+    'ISRG',
+    'LIN',
+    'PEP',
+    'ADBE',
+    'PLTR',
+    'PANW',
+    'CRWD',
 
-	// === BIG TECH & AI ===
-	'AMD',
-	'INTC',
-	'QCOM',
-	'TXN',
-	'MU',
-	'AMAT',
-	'LRCX',
-	'KLAC',
-	'ASML',
-	'TSM',
-	'PANW',
-	'CRWD',
-	'FTNT',
-	'PLTR',
-	'SNOW',
-	'MDB',
-	'DDOG',
-	'NET',
-	'ZS',
-	'OKTA',
-	'SNPS',
-	'MRVL',
-	'ANET',
-	'SMCI',
+    // === SEMICONDUCTOR & AI ===
+    'QCOM',
+    'TXN',
+    'AMAT',
+    'KLAC',
+    'ASML',
+    'TSM',
+    'MRVL',
+    'ANET',
+    'SNPS',
+    'CDNS',
+    'ADI',
+    'MPWR',
+    'NXPI',
+    'MCHP',
+    'ON',
+    'SWKS',
+    'QRVO',
+    'CRUS',
+    'SMCI',
 
-	// === CLOUD / SOFTWARE ===
-	'CRM',
-	'ADBE',
-	'NOW',
-	'INTU',
-	'SHOP',
-	'WDAY',
-	'TEAM',
-	'HUBS',
-	'DOCU',
-	'ZM',
-	'TWLO',
-	'PAYC',
-	'SQ',
+    // === CLOUD / SOFTWARE ===
+    'NOW',
+    'INTU',
+    'SHOP',
+    'WDAY',
+    'TEAM',
+    'HUBS',
+    'MDB',
+    'DDOG',
+    'NET',
+    'ZS',
+    'OKTA',
+    'DOCU',
+    'ZM',
+    'TWLO',
+    'SQ',
+    'PAYC',
+    'SNOW',
 
-	// === INTERNET & SOCIAL ===
-	'NFLX',
-	'SPOT',
-	'UBER',
-	'LYFT',
-	'PINS',
-	'SNAP',
-	'ROKU',
-	'ETSY',
+    // === INTERNET / MEDIA ===
+    'UBER',
+    'SPOT',
+    'DASH',
+    'ETSY',
+    'ROKU',
+    'PINS',
+    'SNAP',
 
-	// === FINTECH & CRYPTO ===
-	'COIN',
-	'HOOD',
-	'PYPL',
-	'SOFI',
-	'AXP',
-	'GS',
-	'BLK',
-	'SCHW',
-	'BKR',
+    // === FINANCIAL / FINTECH ===
+    'AXP',
+    'BLK',
+    'SCHW',
+    'C',
+    'BAC',
+    'USB',
+    'PNC',
+    'SOFI',
+    'HOOD',
+    'COIN',
+    'PYPL',
 
-	// === CHINA ADR ===
-	'BABA',
-	'JD',
-	'BIDU',
-	'NTSE',
-	'BILI',
-	'IQ',
-	'PDD',
+    // === HEALTHCARE & BIOTECH ===
+    'AMGN',
+    'GILD',
+    'BIIB',
+    'PFE',
+    'MDT',
+    'VRTX',
+    'REGN',
+    'CI',
+    'HUM',
+    'CVS',
 
-	// === EV & FUTURE TECH ===
-	'NIO',
-	'LI',
-	'XPEV',
-	'RIVN',
-	'LCID',
+    // === INDUSTRIAL & DEFENSE ===
+    'HON',
+    'RTX',
+    'LMT',
+    'NOC',
+    'GD',
+    'BA',
+    'DE',
+    'ETN',
+    'UPS',
+    'UNP',
+    'MMM',
 
-	// === TELECOM & MEDIA ===
-	'TMUS',
-	'VZ',
-	'CMCSA',
-	'DIS',
+    // === CONSUMER ===
+    'MCD',
+    'SBUX',
+    'NKE',
+    'LOW',
+    'TGT',
+    'BKNG',
+    'DIS',
+    'CMCSA',
+    'TMUS',
+    'VZ',
 
-	// === HEALTHCARE ===
-	'UNH',
-	'ABBV',
-	'MRK',
-	'PFE',
-	'AMGN',
-	'ISRG',
-	'GILD',
-	'BIIB',
-	'TMO',
+    // === ENERGY ===
+    'SLB',
+    'COP',
+    'EOG',
+    'PSX',
+    'MPC',
+    'OXY',
 
-	// === INDUSTRIAL & DEFENSE ===
-	'HON',
-	'CAT',
-	'GE',
-	'BA',
-	'RTX',
-	'LMT',
-	'MMM',
-	'NOC',
-	'GD',
-	'UPS',
-	'UNP',
+    // === HIGH GROWTH / MOMENTUM ===
+    'APP',
+    'DKNG',
+    'TTD',
+    'FIVN',
 
-	// === CONSUMER ===
-	'PG',
-	'KO',
-	'PEP',
-	'MCD',
-	'SBUX',
-	'NKE',
-	'KDP',
-	'CPB',
-	'WBA',
-	'LOW',
+    // === CHINA ADR (NON S&P500 OPTIONAL) ===
+    'BABA',
+    'JD',
+    'BIDU',
+    'PDD',
+    'BILI',
+    'IQ',
 
-	// === HIGH GROWTH / MOMENTUM ===
-	'APP',
-	'RUM',
-	'FUBO',
-	'DKNG',
-	'PTON',
-	'TTD',
-	'FIVN',
-
-	// === NETWORKING / CHIP SUPPORT ===
-	'MPWR',
-	'SWKS',
-	'QRVO',
-	'CRUS',
-	'SYNA',
-	'COMM',
-	'INFN',
-	'ADI',
-	'AVNW',
-	'FFIV',
+    // === EV / FUTURE TECH (NON S&P500 OPTIONAL) ===
+    'RIVN',
+    'LCID',
+    'NIO',
+    'LI',
+    'XPEV'
 ];
 
 // ==========================================
 // FUNCTION UTAMA
 // ==========================================
 
-// FUNGSI TELEGRAM YANG SUDAH DIPERBAIKI
 function sendTelegramMessage(message) {
     return new Promise((resolve) => {
         if (!USE_TELEGRAM || !TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
@@ -303,87 +249,11 @@ function sendTelegramMessage(message) {
     });
 }
 
-// FUNGSI WHATSAPP MENGGUNAKAN whatsapp-web.js
-async function sendWhatsAppMessage(message) {
-    if (!USE_WHATSAPP || !WHATSAPP_TARGET) {
-        return;
-    }
-
-    try {
-        if (!whatsappClient.info) {
-            console.error('💬 ❌ WhatsApp belum terhubung');
-            return;
-        }
-
-        const chat = await whatsappClient.getChatById(`${WHATSAPP_TARGET}@c.us`);
-        await chat.sendMessage(message);
-        console.log('💬 ✅ Pesan WhatsApp berhasil dikirim!');
-    } catch (error) {
-        console.error(`💬 ❌ Gagal kirim WhatsApp: ${error.message}`);
-    }
-}
-
-// FUNGSI WHATSAPP CALLMEBOT API (GRATIS, TANPA QR)
-function sendCallMeBotMessage(message) {
-    return new Promise((resolve) => {
-        if (!USE_CALLMEBOT || !CALLMEBOT_API_KEY || !WHATSAPP_TARGET) {
-            resolve();
-            return;
-        }
-
-        const data = JSON.stringify({
-            phone: WHATSAPP_TARGET,
-            apikey: CALLMEBOT_API_KEY,
-            text: message,
-            format: 'html'
-        });
-
-        const options = {
-            hostname: 'api.callmebot.com',
-            port: 443,
-            path: '/whatsapp.php',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(data)
-            }
-        };
-
-        const req = https.request(options, (res) => {
-            let responseBody = '';
-            res.on('data', (chunk) => responseBody += chunk);
-            res.on('end', () => {
-                if (res.statusCode === 200) {
-                    console.log('💬 ✅ Pesan WhatsApp CallMeBot berhasil dikirim!');
-                } else {
-                    console.error(`💬 ❌ Gagal kirim CallMeBot (Error ${res.statusCode}): ${responseBody}`);
-                }
-                resolve();
-            });
-        });
-
-        req.on('error', (error) => {
-            console.error(`💬 ❌ [CallMeBot Error] ${error.message}`);
-            resolve();
-        });
-
-        req.write(data);
-        req.end();
-    });
-}
-
 function sendNotification(message) {
-    const promises = [];
     if (USE_TELEGRAM && TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
-        promises.push(sendTelegramMessage(message));
+        return sendTelegramMessage(message);
     }
-    if (USE_WHATSAPP && WHATSAPP_TARGET && whatsappClient?.info) {
-        promises.push(sendWhatsAppMessage(message));
-    }
-    if (USE_CALLMEBOT && CALLMEBOT_API_KEY && WHATSAPP_TARGET) {
-        promises.push(sendCallMeBotMessage(message));
-    }
-    return Promise.all(promises);
+    return Promise.resolve();
 }
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -392,26 +262,35 @@ async function analyzeStock(symbol, timeframe = '1h') {
     try {
         const today = new Date();
         const startDate = new Date();
-        const daysBack = timeframe === '1h' ? 60 : 240;
+        // 2H butuh lebih banyak data historis karena periode yang lebih panjang
+        const daysBackMap = { '1h': 60, '2h': 120, '4h': 240 };
+        const intervalMap  = { '1h': '1h',  '2h': '1h',  '4h': '1h' }; // Yahoo Finance tidak punya endpoint 2H natif, agregasi manual
+        const daysBack = daysBackMap[timeframe] || 60;
         startDate.setDate(today.getDate() - daysBack);
 
         const result = await yahooFinance.chart(symbol, {
             period1: startDate,
             period2: today,
-            interval: '1h',
-            includePrePost: true
+            interval: intervalMap[timeframe] || '1h',
+            includePrePost: false
         });
 
         if (!result.quotes || result.quotes.length === 0) return null;
 
-        const validCandles = result.quotes.filter(candle => candle.close !== undefined && candle.close !== null);
+        const validCandles = result.quotes.filter(
+            candle => candle.close !== undefined && candle.close !== null
+        );
         let closes = validCandles.map(candle => candle.close);
         
-        if (timeframe === '4h') {
+        // Agregasi menjadi timeframe yang diinginkan
+        if (timeframe === '2h') {
+            closes = aggregateTo2H(validCandles);
+        } else if (timeframe === '4h') {
             closes = aggregateTo4H(validCandles);
         }
 
-        const minCandles = timeframe === '1h' ? 220 : 100;
+        // 2H butuh lebih sedikit minimum candle dari 4H, lebih banyak dari 1H
+        const minCandles = timeframe === '1h' ? 220 : timeframe === '2h' ? 150 : 100;
         if (closes.length < minCandles) {
             return null;
         }
@@ -461,6 +340,23 @@ async function analyzeStock(symbol, timeframe = '1h') {
     return null;
 }
 
+// Agregasi 2 candle 1H menjadi 1 candle 2H
+function aggregateTo2H(candles) {
+    const aggregated = [];
+    for (let i = 0; i < candles.length; i += 2) {
+        const chunk = candles.slice(i, i + 2);
+        if (chunk.length === 2) {
+            const open  = chunk[0].open;
+            const high  = Math.max(...chunk.map(c => c.high));
+            const low   = Math.min(...chunk.map(c => c.low));
+            const close = chunk[1].close;
+            aggregated.push({ ...chunk[1], open, high, low, close });
+        }
+    }
+    return aggregated.map(c => c.close);
+}
+
+// Agregasi 4 candle 1H menjadi 1 candle 4H
 function aggregateTo4H(candles) {
     const aggregated = [];
     for (let i = 0; i < candles.length; i += 4) {
@@ -513,55 +409,52 @@ async function runScreener(timeframe, label) {
         let csvContent = `Symbol,Close Price,Stoch_K,Stoch_D,SMA_200_${label},Trend,Timestamp\n`;
         buySignals.forEach(s => {
             const trendLabel = s.isBullish ? 'Bullish' : 'Bearish (< SMA 200)';
-            csvContent += `${s.symbol},${s.close},${s.k},${s.d},${s.sma200},${trendLabel},${new Date().toLocaleString()}\n`;
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID');
+            csvContent += `${s.symbol},${s.close},${s.k},${s.d},${s.sma200},"${trendLabel}","${timestamp}"\n`;
         });
         
         fs.writeFileSync(csvFile, csvContent, 'utf8');
         console.log(`📊 Berhasil diekspor ke file: ${csvFile}`);
 
+        // ===== NOTIFIKASI TELEGRAM (hanya 2H dan 4H, format simple HTML) =====
+        if (label === '1H') return; // 1H tidak dikirim notifikasi
+
         const TELEGRAM_MAX_LEN = 4096;
 
-        function formatSignalEntry(s) {
-            const icon = s.isBullish ? "✅" : "⚠️";
-            const trendWarning = s.isBullish ? "" : "\n  <i>⚠️ Info: Harga di bawah SMA 200</i>";
-            return `${icon} <b>${s.symbol}</b> - Harga: $${s.close} \n  (Stoch %K: ${s.k} menembus %D: ${s.d})${trendWarning}`;
-        }
+        // Format 1 baris: ✅ <b>SYMBOL</b>  $Harga  %K:%k  %D:%d
+        const lines = buySignals.map(s => {
+            const icon  = s.isBullish ? '✅' : '⚠️';
+            const bold  = s.isBullish
+                ? `<b style="color:#22c55e">${s.symbol}</b>`
+                : `<b style="color:#eab308">${s.symbol}</b>`;
+            return `${icon} ${bold}  $${s.close}  %K:${s.k}  %D:${s.d}`;
+        });
 
-        function buildHeader(total, tf) {
-            return `🔔 <b>[${tf} STOCH-RSI BUY ALERT]</b> 🔔\n\nDitemukan <b>${total}</b> sinyal:\n\n`;
-        }
+        const header = `[${label}] Sinyal Beli — ${buySignals.length} saham\n`;
+        const body   = lines.join('\n');
+        const msg    = header + body;
 
-        function buildFooter(startIdx, endIdx, total) {
-            return `\n<i>Menampilkan ${startIdx + 1}–${Math.min(endIdx, total)} dari ${total} sinyal</i>`;
-        }
-
-        const total = buySignals.length;
-        const headerText = buildHeader(total, label);
-        const footerLen = 80;
-
-        const entries = buySignals.map(formatSignalEntry).join('\n\n');
-
-        const fullText = headerText + entries + buildFooter(0, total, total);
-
-        if (fullText.length <= TELEGRAM_MAX_LEN) {
-            await sendNotification(fullText);
+        // Kirim utuh jika ≤ 4096, jika lebih bagi per bagian
+        if (msg.length <= TELEGRAM_MAX_LEN) {
+            await sendNotification(msg);
         } else {
-            console.log(`⚠️ Pesan terlalu panjang (${fullText.length} chars), membagi menjadi ${Math.ceil(entries.length / (TELEGRAM_MAX_LEN - headerText.length - footerLen))} pesan...`);
+            console.log(`⚠️ Pesan ${msg.length} chars melebihi batas, dibagi menjadi beberapa pesan...`);
             let start = 0;
-            let part = 1;
-            while (start < entries.length) {
-                const available = TELEGRAM_MAX_LEN - headerText.length - footerLen - 10;
-                let end = start + available;
-                if (end < entries.length) {
-                    const lastNewline = entries.lastIndexOf('\n', end);
-                    if (lastNewline > start) end = lastNewline + 1;
+            while (start < lines.length) {
+                const partLines = [];
+                let len = header.length;
+                for (let i = start; i < lines.length; i++) {
+                    const lineLen = lines[i].length + 1;
+                    if (len + lineLen > TELEGRAM_MAX_LEN - 20) break;
+                    partLines.push(lines[i]);
+                    len += lineLen;
                 }
-                const chunk = entries.substring(start, end);
-                const isLastPart = end >= entries.length;
-                const partMsg = buildHeader(total, label) + chunk + (isLastPart ? buildFooter(start, entries.length, total) : '');
-                await sendNotification(partMsg);
-                start = end;
-                part++;
+                await sendNotification(
+                    `[${label}] Sinyal Beli (${start + 1}–${start + partLines.length} dari ${lines.length})\n` +
+                    partLines.join('\n')
+                );
+                start += partLines.length;
                 await sleep(300);
             }
         }
@@ -571,6 +464,8 @@ async function runScreener(timeframe, label) {
 
 async function startScreener() {
     await runScreener('1h', '1H');
+    console.log('\n');
+    await runScreener('2h', '2H');
     console.log('\n');
     await runScreener('4h', '4H');
 }
